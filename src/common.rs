@@ -2357,7 +2357,52 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
     ThrottledInterval::new(i)
 }
 
+// Genixsoft: musteri surumu ayarlari programin icine gomulu (imzali custom.txt gerekmez).
+// approve-mode=click -> her baglantida musteri "Kabul et" der; ayarlar/kurulum/hesap gizli.
+const GENIX_CUSTOM_CLIENT: &str = r#"{
+    "app-name": "Genix Destek",
+    "disable-settings": "Y",
+    "disable-ab": "Y",
+    "disable-account": "Y",
+    "disable-installation": "Y",
+    "disable-tcp-listen": "Y",
+    "override-settings": {
+        "approve-mode": "click",
+        "verification-method": "use-temporary-password",
+        "enable-check-update": "N",
+        "allow-auto-update": "N",
+        "enable-lan-discovery": "N",
+        "allow-remote-config-modification": "N",
+        "hide-general-settings": "Y",
+        "hide-security-settings": "Y",
+        "hide-network-settings": "Y",
+        "hide-server-settings": "Y",
+        "hide-proxy-settings": "Y",
+        "hide-remote-printer-settings": "Y",
+        "hide-websocket-settings": "Y",
+        "hide-stop-service": "Y",
+        "hide-help-cards": "Y",
+        "hide-powered-by-me": "Y",
+        "disable-change-id": "Y",
+        "disable-change-permanent-password": "Y",
+        "disable-unlock-pin": "Y"
+    },
+    "default-settings": {
+        "lang": "tr",
+        "theme": "dark"
+    }
+}"#;
+
 pub fn load_custom_client() {
+    if let Ok(data) = serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(GENIX_CUSTOM_CLIENT) {
+        apply_custom_client_data(data);
+    } else {
+        log::error!("Failed to parse Genix custom client config");
+    }
+}
+
+#[allow(dead_code)]
+fn load_custom_client_orig() {
     #[cfg(debug_assertions)]
     if let Ok(data) = std::fs::read_to_string("./custom.txt") {
         read_custom_client(data.trim());
@@ -2469,13 +2514,16 @@ pub fn read_custom_client(config: &str) {
         log::error!("Failed to dec custom client config");
         return;
     };
-    let Ok(mut data) =
+    let Ok(data) =
         serde_json::from_slice::<std::collections::HashMap<String, serde_json::Value>>(&data)
     else {
         log::error!("Failed to parse custom client config");
         return;
     };
+    apply_custom_client_data(data);
+}
 
+fn apply_custom_client_data(mut data: std::collections::HashMap<String, serde_json::Value>) {
     if let Some(app_name) = data.remove("app-name") {
         if let Some(app_name) = app_name.as_str() {
             *config::APP_NAME.write().unwrap() = app_name.to_owned();
