@@ -2358,9 +2358,11 @@ pub fn rustdesk_interval(i: Interval) -> ThrottledInterval {
 }
 
 // Genixsoft: musteri surumu ayarlari programin icine gomulu (imzali custom.txt gerekmez).
+// conn-type=incoming -> program YALNIZ baglanilir, indiren kimse baskasina baglanamaz (yonetici ayri programla baglanir).
 // approve-mode=click -> her baglantida musteri "Kabul et" der; ayarlar/kurulum/hesap gizli.
 const GENIX_CUSTOM_CLIENT: &str = r#"{
     "app-name": "Genix Destek",
+    "conn-type": "incoming",
     "disable-settings": "Y",
     "disable-ab": "Y",
     "disable-account": "Y",
