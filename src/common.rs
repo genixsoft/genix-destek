@@ -2395,8 +2395,40 @@ const GENIX_CUSTOM_CLIENT: &str = r#"{
     }
 }"#;
 
+// Genixsoft yonetici surumu (derlemede GENIX_ROL=yonetici): YALNIZ baglanan, yardim kartlari ve
+// sunucu ayari gizli, sunucu sabit. Musteri surumu yukaridaki GENIX_CUSTOM_CLIENT.
+const GENIX_YONETICI_CLIENT: &str = r#"{
+    "app-name": "Genix Yonetici",
+    "conn-type": "outgoing",
+    "disable-installation": "Y",
+    "disable-account": "Y",
+    "disable-ab": "Y",
+    "override-settings": {
+        "enable-check-update": "N",
+        "allow-auto-update": "N",
+        "hide-help-cards": "Y",
+        "hide-powered-by-me": "Y",
+        "hide-server-settings": "Y",
+        "hide-proxy-settings": "Y",
+        "hide-websocket-settings": "Y",
+        "hide-remote-printer-settings": "Y"
+    },
+    "default-settings": {
+        "lang": "tr",
+        "theme": "dark"
+    }
+}"#;
+
+fn genix_custom_client() -> &'static str {
+    if option_env!("GENIX_ROL") == Some("yonetici") {
+        GENIX_YONETICI_CLIENT
+    } else {
+        GENIX_CUSTOM_CLIENT
+    }
+}
+
 pub fn load_custom_client() {
-    if let Ok(data) = serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(GENIX_CUSTOM_CLIENT) {
+    if let Ok(data) = serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(genix_custom_client()) {
         apply_custom_client_data(data);
     } else {
         log::error!("Failed to parse Genix custom client config");

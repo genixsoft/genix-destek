@@ -3,12 +3,19 @@ name: Genix Destek - Windows derleme
 # Genixsoft: yalniz Windows x64 tek dosya (GenixDestek.exe). Elle baslatilir.
 on:
   workflow_dispatch:
+    inputs:
+      rol:
+        description: "musteri = GenixDestek.exe (yalniz baglanilir) / yonetici = GenixYonetici.exe (yalniz baglanir)"
+        type: choice
+        options: [musteri, yonetici]
+        default: musteri
 
 permissions:
   contents: write
   actions: read
 
 env:
+  GENIX_ROL: "${{ inputs.rol }}"
   SCITER_RUST_VERSION: "1.75" # https://github.com/rustdesk/rustdesk/discussions/7503, also 1.78 has ABI change which causes our sciter version not working, https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
   RUST_VERSION: "1.75" # sciter failed on m1 with 1.78 because of https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
   MAC_RUST_VERSION: "1.81" # 1.81 is requred for macos, because of https://github.com/yury/cidre requires 1.81
@@ -315,21 +322,22 @@ jobs:
       - name: Genix Destek adiyla hazirla
         shell: bash
         run: |
-          mv ./SignOutput/rustdesk-${{ env.VERSION }}-x86_64.exe ./SignOutput/GenixDestek.exe
-          sha256sum ./SignOutput/GenixDestek.exe | tee ./SignOutput/GenixDestek.exe.sha256
+          if [ "${{ inputs.rol }}" = "yonetici" ]; then AD=GenixYonetici; else AD=GenixDestek; fi
+          mv ./SignOutput/rustdesk-${{ env.VERSION }}-x86_64.exe ./SignOutput/$AD.exe
+          sha256sum ./SignOutput/$AD.exe | tee ./SignOutput/$AD.exe.sha256
 
       - name: Upload GenixDestek.exe
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: GenixDestek-windows-x64
-          path: ./SignOutput/GenixDestek.exe*
+          name: Genix-${{ inputs.rol }}-windows-x64
+          path: ./SignOutput/Genix*.exe*
 
       - name: Publish Release
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           prerelease: true
-          tag_name: genix-destek-${{ github.run_number }}
-          name: Genix Destek ${{ env.VERSION }} (derleme ${{ github.run_number }})
+          tag_name: genix-${{ inputs.rol }}-${{ github.run_number }}
+          name: Genix ${{ inputs.rol }} ${{ env.VERSION }} (derleme ${{ github.run_number }})
           files: |
-            ./SignOutput/GenixDestek.exe
-            ./SignOutput/GenixDestek.exe.sha256
+            ./SignOutput/Genix*.exe
+            ./SignOutput/Genix*.exe.sha256
