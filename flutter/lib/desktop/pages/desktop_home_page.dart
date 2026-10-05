@@ -413,6 +413,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   buildTip(BuildContext context) {
     final isOutgoingOnly = bind.isOutgoingOnly();
+    // Genixsoft: musteri surumunde (yalniz baglanilir) "kimlik ve sifre ile erisilebilir" yazisi yok; sifre kullanilmiyor.
+    if (bind.isIncomingOnly()) {
+      return const SizedBox(height: 8);
+    }
     return Padding(
       padding:
           const EdgeInsets.only(left: 20.0, right: 16, top: 16.0, bottom: 5),
