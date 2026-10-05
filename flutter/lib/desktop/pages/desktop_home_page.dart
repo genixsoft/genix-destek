@@ -294,6 +294,31 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     final textColor = Theme.of(context).textTheme.titleLarge?.color;
     final showOneTime = model.approveMode != 'click' &&
         model.verificationMethod != kUsePermanentPassword;
+    // Genixsoft: onay modunda (click) parola kullanilmaz; bos parola kutusu yerine kisa bilgi.
+    if (model.approveMode == 'click') {
+      return Container(
+        margin: EdgeInsets.only(left: 20.0, right: 16, top: 13, bottom: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 2,
+              height: 52,
+              decoration: BoxDecoration(color: MyTheme.accent),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 7),
+                child: Text(
+                  'Şifre gerekmez.\nBağlandığımızda ekranınızda çıkan pencerede "Kabul et" düğmesine basın.',
+                  style: TextStyle(
+                      fontSize: 13, color: textColor?.withOpacity(0.75)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       margin: EdgeInsets.only(left: 20.0, right: 16, top: 13, bottom: 13),
       child: Row(
