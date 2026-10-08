@@ -1081,8 +1081,10 @@ class _CmControlPanel extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
+        // Genixsoft: ayri "Kabul Et ve Yukselt" dugmesi gizli; tek "Kabul Et" dugmesi
+        // Windows'ta yukseltmeyi de ister (asagida). Musteri tek dugmeye basar.
         Offstage(
-          offstage: !showElevation || !showAccept,
+          offstage: true,
           child: buildButton(context, color: Colors.green[700], onClick: () {
             handleAccept(context);
             handleElevate(context);
@@ -1109,6 +1111,10 @@ class _CmControlPanel extends StatelessWidget {
                       color: MyTheme.accent,
                       onClick: () {
                         handleAccept(context);
+                        // Genixsoft: portable Windows'ta kabul ederken yetki de iste
+                        // (UAC "Evet") -> yonetici penceresi one gelince
+                        // "Bekle / Yukseltme Istegi" uyarisi cikmasin.
+                        if (showElevation) handleElevate(context);
                         windowManager.minimize();
                       },
                       text: 'Accept',

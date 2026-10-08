@@ -369,7 +369,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Write a message", "Bir mesaj yazın"),
         ("Prompt", "İstem"),
         ("Please wait for confirmation of UAC...", "UAC onayı için lütfen bekleyiniz..."),
-        ("elevated_foreground_window_tip", "elevated_foreground_window_tip"),
+        ("elevated_foreground_window_tip", "Karşı bilgisayarda öndeki pencere yönetici yetkisi istiyor; fare ve klavye geçici olarak çalışmıyor. Müşteriden o pencereyi küçültmesini isteyin ya da Yükseltme İsteği ile yetki isteyin."),
         ("Disconnected", "Bağlantı Kesildi"),
         ("Other", "Diğer"),
         ("Confirm before closing multiple tabs", "Çoklu sekmeleri kapatmadan önce onayla"),
