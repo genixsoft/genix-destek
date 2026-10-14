@@ -1,7 +1,8 @@
 name: Genix Destek - Mac derleme
 
-# Genixsoft: musteri surumu (yalniz baglanilir) Mac icin; Apple imzasi YOK (ucretsiz ad-hoc imza).
-# Ilk acilista Mac uyarir: Sistem Ayarlari > Gizlilik ve Guvenlik > "Yine de Ac".
+# Genixsoft: musteri surumu (yalniz baglanilir) Mac icin.
+# MACOS_P12_BASE64 + NOTARY_* secret'lari varsa Developer ID ile imzalanir ve Apple'a onaylatilir
+# (notarize + staple) -> Mac uyari vermeden acar. Yoksa ad-hoc imzaya duser ("Yine de Ac" gerekir).
 on:
   workflow_dispatch:
 
@@ -43,6 +44,10 @@ env:
   #signing keys env variable checks
   ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
   MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
+  MACOS_P12_PASSWORD: "${{ secrets.MACOS_P12_PASSWORD }}"
+  NOTARY_KEY_P8_BASE64: "${{ secrets.NOTARY_KEY_P8_BASE64 }}"
+  NOTARY_KEY_ID: "${{ secrets.NOTARY_KEY_ID }}"
+  NOTARY_ISSUER_ID: "${{ secrets.NOTARY_ISSUER_ID }}"
   UPLOAD_ARTIFACT: "true"
   SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}-2"
 jobs:
@@ -187,7 +192,7 @@ jobs:
           fi
           ./build.py --flutter --hwcodec --unix-file-copy-paste ${{ matrix.job.extra-build-args }}
 
-      - name: Genix Destek olarak adlandir ve ucretsiz (ad-hoc) imzala
+      - name: Genix Destek olarak adlandir ve imzala
         run: |
           set -e
           cd ./flutter/build/macos/Build/Products/Release
@@ -200,16 +205,51 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleName Genix Destek" "$P"
           /usr/libexec/PlistBuddy -c "Delete :CFBundleDisplayName" "$P" || true
           /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Genix Destek" "$P"
-          codesign --force --deep -s - "$APP"
-          codesign --verify --deep --verbose=2 "$APP"
+          if [ -n "$MACOS_P12_BASE64" ]; then
+            KC="$RUNNER_TEMP/genix.keychain-db"; KCP="$(uuidgen)"
+            echo "$MACOS_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/genix.p12"
+            security create-keychain -p "$KCP" "$KC"
+            security set-keychain-settings -lut 21600 "$KC"
+            security unlock-keychain -p "$KCP" "$KC"
+            security import "$RUNNER_TEMP/genix.p12" -P "$MACOS_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+            security set-key-partition-list -S apple-tool:,apple: -k "$KCP" "$KC" >/dev/null
+            security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+            rm -f "$RUNNER_TEMP/genix.p12"
+            ID="Developer ID Application: OKAY AYDIN (3NQBF82PXT)"
+            # once icerideki tum parcalar, sonra ana uygulama yetkileriyle (hardened runtime + zaman damgasi)
+            codesign --force --deep --options runtime --timestamp -s "$ID" "$APP"
+            codesign --force --options runtime --timestamp --entitlements "${GITHUB_WORKSPACE}/flutter/macos/Runner/Release.entitlements" -s "$ID" "$APP"
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            echo "GENIX_IMZA=devid" >> "$GITHUB_ENV"
+          else
+            codesign --force --deep -s - "$APP"
+            codesign --verify --deep --verbose=2 "$APP"
+            echo "GENIX_IMZA=adhoc" >> "$GITHUB_ENV"
+          fi
           ls "$APP/Contents/MacOS"
 
-      - name: DMG olustur
+      - name: DMG olustur, imzala ve Apple onayi
         run: |
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
           create-dmg --volname "Genix Destek" --icon "Genix Destek.app" 200 190 --hide-extension "Genix Destek.app" --window-size 800 400 --app-drop-link 600 185 "GenixDestek-mac-${{ matrix.job.arch }}.dmg" "./flutter/build/macos/Build/Products/Release/Genix Destek.app"
+          DMG="GenixDestek-mac-${{ matrix.job.arch }}.dmg"
+          if [ "$GENIX_IMZA" = "devid" ]; then
+            codesign --force --timestamp -s "Developer ID Application: OKAY AYDIN (3NQBF82PXT)" "$DMG"
+            echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+            # Apple onayi (notarize); reddedilirse nedenini loga bas ve dur
+            xcrun notarytool submit "$DMG" --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait --timeout 60m --output-format json | tee "$RUNNER_TEMP/notary.json"
+            if ! grep -q '"status" *: *"Accepted"' "$RUNNER_TEMP/notary.json"; then
+              SID=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['id'])" "$RUNNER_TEMP/notary.json")
+              xcrun notarytool log "$SID" --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
+              exit 1
+            fi
+            xcrun stapler staple "$DMG"
+            xcrun stapler validate "$DMG"
+            spctl -a -t open --context context:primary-signature -vv "$DMG" || true
+            rm -f "$RUNNER_TEMP/notary.p8"
+          fi
           shasum -a 256 GenixDestek-mac-*.dmg
 
       - name: Upload dmg
