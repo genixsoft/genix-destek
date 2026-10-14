@@ -228,35 +228,58 @@ jobs:
           fi
           ls "$APP/Contents/MacOS"
 
-      - name: DMG olustur, imzala ve Apple onayi
+      - name: DMG olustur ve imzala
         run: |
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
           create-dmg --volname "Genix Destek" --icon "Genix Destek.app" 200 190 --hide-extension "Genix Destek.app" --window-size 800 400 --app-drop-link 600 185 "GenixDestek-mac-${{ matrix.job.arch }}.dmg" "./flutter/build/macos/Build/Products/Release/Genix Destek.app"
-          DMG="GenixDestek-mac-${{ matrix.job.arch }}.dmg"
           if [ "$GENIX_IMZA" = "devid" ]; then
-            codesign --force --timestamp -s "Developer ID Application: OKAY AYDIN (3NQBF82PXT)" "$DMG"
-            echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-            # Apple onayi (notarize); reddedilirse nedenini loga bas ve dur
-            xcrun notarytool submit "$DMG" --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait --timeout 60m --output-format json | tee "$RUNNER_TEMP/notary.json"
-            if ! grep -q '"status" *: *"Accepted"' "$RUNNER_TEMP/notary.json"; then
-              SID=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['id'])" "$RUNNER_TEMP/notary.json")
-              xcrun notarytool log "$SID" --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
-              exit 1
-            fi
-            xcrun stapler staple "$DMG"
-            xcrun stapler validate "$DMG"
-            spctl -a -t open --context context:primary-signature -vv "$DMG" || true
-            rm -f "$RUNNER_TEMP/notary.p8"
+            codesign --force --timestamp -s "Developer ID Application: OKAY AYDIN (3NQBF82PXT)" "GenixDestek-mac-${{ matrix.job.arch }}.dmg"
           fi
           shasum -a 256 GenixDestek-mac-*.dmg
 
-      - name: Upload dmg
+      # Apple onayi gecikse bile imzali dmg kaybolmasin: once kaydet
+      - name: Upload dmg (imzali)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: GenixDestek-mac-${{ matrix.job.arch }}-imzali
+          path: GenixDestek-mac-${{ matrix.job.arch }}.dmg
+
+      - name: Apple onayi (notarize + staple)
+        if: env.GENIX_IMZA == 'devid'
+        run: |
+          DMG="GenixDestek-mac-${{ matrix.job.arch }}.dmg"
+          K="$RUNNER_TEMP/notary.p8"
+          echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$K"
+          A=(--key "$K" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID")
+          SID=$(xcrun notarytool submit "$DMG" "${A[@]}" --output-format json | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+          echo "Apple gonderim no: $SID"
+          echo "$SID" > "notary-${{ matrix.job.arch }}.txt"
+          xcrun notarytool wait "$SID" "${A[@]}" --timeout 45m || true
+          ST=$(xcrun notarytool info "$SID" "${A[@]}" --output-format json | python3 -c "import json,sys;print(json.load(sys.stdin)['status'])")
+          echo "Apple durumu: $ST"
+          if [ "$ST" = "Accepted" ]; then
+            xcrun stapler staple "$DMG"
+            xcrun stapler validate "$DMG"
+            spctl -a -t open --context context:primary-signature -vv "$DMG" || true
+          elif [ "$ST" = "In Progress" ]; then
+            echo "::warning::Apple onayi hala suruyor ($SID); dmg imzali kaydedildi, onay sonra eklenecek"
+          else
+            xcrun notarytool log "$SID" "${A[@]}" || true
+            exit 1
+          fi
+          rm -f "$K"
+
+      - name: Upload dmg (son)
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: GenixDestek-mac-${{ matrix.job.arch }}
-          path: GenixDestek-mac-${{ matrix.job.arch }}.dmg
+          path: |
+            GenixDestek-mac-${{ matrix.job.arch }}.dmg
+            notary-${{ matrix.job.arch }}.txt
+          if-no-files-found: warn
 
       - name: Publish Release
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
